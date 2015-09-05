@@ -3,35 +3,41 @@
 import binascii
 import sys, re
 
-print "CRC32 test: %08X" % (binascii.crc32("some\n bullshit\r test\0\0 to compare to PHP equivalent") & 0xffffffff);
-print "unhexlify test: %s (<- should read \"Hallo\")" % binascii.unhexlify("48616C6c6F00");
-print "stripcslashes test: %s" % re.sub("\\\\\\\\", "\\\\", "foo\\\\bar\\blupp")
-
 # TODO credits
 # TODO windows line endings?
 
+################################################################################
 # global pre-compiled regex objects for later matching
-# matches a key-value pair found on the top of the config
+################################################################################
+
 # TODO do we need to allow optional whitespaces before the end of the line?
+
+# matches a key-value pair found on the top of the config
 var_val_pair_regex = re.compile("^([\w]+)=([\S]+)$");
 
-# matches the begin marker of a config file name
+# matches begin marker of a config file
 cfg_file_start_regex = re.compile("^\*{4} CFGFILE:([\S]+)$")
 
+# macthes beging marker of a binary file
 bin_file_start_regex = re.compile("^\*{4} BINFILE:([\S]+)$")
 
+# matches end marker of config and binary files
 any_file_end_regex = re.compile("^\*{4} END OF FILE \*{4}$")
 
+# matches old/current checksum in config
 current_checksum_regex = re.compile("^\*{4} END OF EXPORT ([0-9A-Za-z]{8}) \*{4}$")
 
+################################################################################
+# helper functions
+################################################################################
+
 def read_config_file(filename, lines):
-    #print "amount of lines: %i" % len(lines)
-    #for line in lines:
-    #    print line,
-    #sys.exit(2)
+    """ Concatenate the filename with NUL, then add all but the last line of
+    the config file to the result string, converting double backslashes to
+    single backslashes in each line. """
     result = str(filename) + '\0'
     for line in lines[:-1]:
-        result += re.sub("\\\\\\\\", "\\\\", line) # TODO stripcslashes
+        result += re.sub("\\\\\\\\", "\\\\", line)
     if lines[-1] != str("\n"):
         # TODO does the fritzbox also accept configs with no such newline?
         print "Whoops, I was expecting an empty line at the end of file \"%s\"!" % filename
@@ -39,12 +45,23 @@ def read_config_file(filename, lines):
     return result
 
 def read_binary_file(filename, lines):
+    """ Concatenate the filename with NUL, then add all bytes (line endings
+    stripped) in the binary file to the result string (convert hexadecimal
+    ASCII into binary). """
     result = str(filename) + '\0'
     for line in lines:
         result += binascii.unhexlify(line.strip())
     return result
 
+################################################################################
+# main
+################################################################################
+
 def main():
+    """ Read all lines in the exported config file and try to match them to
+    the regexes defined above. If so, add the required info to the checksum
+    material. For files, slice the file contents and let helper functions
+    process them. """
     config_lines = list() # input (list of lines, line endings included)
     checksum_material = str() # accumulated data for CRC32 calculation
 
@@ -64,17 +81,17 @@ def main():
 
     line_index = int(0)
     while line_index < len(config_lines):
-        #print "processing line: %i" % (line_index + 1)
         line = config_lines[line_index]
 
-        # determine the type of this (and maybe the following) input line(s)
+        # handling of key-value-pairs relevant for checksum material
         match = re.match(var_val_pair_regex, line);
         if match:
+            # concatenate key string with value string and NUL
             checksum_material += match.group(1) + match.group(2) + '\0';
-            #print "%s" % checksum_material
             line_index += 1
             continue
 
+        # handling of config files
         match = re.match(cfg_file_start_regex, line);
         if match:
             file_start = line_index + 1
@@ -82,11 +99,10 @@ def main():
             while not re.match(any_file_end_regex, config_lines[file_end]):
                 file_end += 1
             checksum_material += read_config_file(match.group(1), config_lines[file_start:file_end])
-            #print "%s" % checksum_material,
-            #sys.exit(2)
             line_index = file_end + 1
             continue
 
+        # handling of binary files
         match = re.match(bin_file_start_regex, line);
         if match:
             file_start = line_index + 1
@@ -97,6 +113,7 @@ def main():
             line_index = file_end + 1
             continue
 
+        # extract/print current checksum
         match = re.match(current_checksum_regex, line);
         if match:
             print "Current Checksum: %s" % match.groups(1)
@@ -105,9 +122,6 @@ def main():
 
         # line is ignored
         line_index += 1
-
-    #with open("python-out.bin", "w") as f:
-    #    f.write(checksum_material)
 
     print " Proper Checksum: %08X" % (binascii.crc32(checksum_material) & 0xffffffff)
 
