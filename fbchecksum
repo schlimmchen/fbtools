@@ -22,6 +22,8 @@ bin_file_start_regex = re.compile("^\*{4} BINFILE:([\S]+)$")
 
 any_file_end_regex = re.compile("^\*{4} END OF FILE \*{4}$")
 
+current_checksum_regex = re.compile("^\*{4} END OF EXPORT ([0-9A-Za-z]{8}) \*{4}$")
+
 def read_config_file(filename, lines):
     #print "amount of lines: %i" % len(lines)
     #for line in lines:
@@ -95,13 +97,19 @@ def main():
             line_index = file_end + 1
             continue
 
+        match = re.match(current_checksum_regex, line);
+        if match:
+            print "Current Checksum: %s" % match.groups(1)
+            line_index += 1
+            continue
+
         # line is ignored
         line_index += 1
 
     #with open("python-out.bin", "w") as f:
     #    f.write(checksum_material)
 
-    print "presumably proper checksum: %08X" % (binascii.crc32(checksum_material) & 0xffffffff)
+    print " Proper Checksum: %08X" % (binascii.crc32(checksum_material) & 0xffffffff)
 
 if __name__ == '__main__':
     main()
