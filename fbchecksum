@@ -1,9 +1,15 @@
 #!/usr/bin/python
 
+# The reverse engineering required to come up with the method to calculate the
+# checksum so the Fritz!Box would accept altered config files is not my work.
+# Here is a list of sources I gathered the required information from:
+# - fb_tools.php.gz from http://www.mengelke.de/Projekte/FritzBoxTools
+# - http://www.akk.org/~enrik/fbox/util/exportsum.pl
+# - http://www.ip-phone-forum.de/showthread.php?t=77639
+# - https://github.com/olistudent/FBEditor
+
 import binascii
 import sys, re
-
-# TODO credits
 
 ################################################################################
 # global pre-compiled regex objects for later matching
