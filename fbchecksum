@@ -53,6 +53,11 @@ def read_binary_file(filename, lines):
         result += binascii.unhexlify(line.strip())
     return result
 
+def slice_file(match, config_lines, file_start, handler):
+    file_end = file_start + 1
+    while not re.match(any_file_end_regex, config_lines[file_end]):
+        file_end += 1
+    return (file_end + 1, handler(match.group(1), config_lines[file_start:file_end]))
 ################################################################################
 # main
 ################################################################################
@@ -70,6 +75,7 @@ def main():
         sys.exit(-1)
 
     filename = sys.argv[1]
+    debug = 0
 
     try:
         with file(filename) as f:
@@ -94,23 +100,15 @@ def main():
         # handling of config files
         match = re.match(cfg_file_start_regex, line);
         if match:
-            file_start = line_index + 1
-            file_end = file_start + 1
-            while not re.match(any_file_end_regex, config_lines[file_end]):
-                file_end += 1
-            checksum_material += read_config_file(match.group(1), config_lines[file_start:file_end])
-            line_index = file_end + 1
+            line_index, add = slice_file(match, config_lines, line_index + 1, read_config_file)
+            checksum_material += add
             continue
 
         # handling of binary files
         match = re.match(bin_file_start_regex, line);
         if match:
-            file_start = line_index + 1
-            file_end = file_start + 1
-            while not re.match(any_file_end_regex, config_lines[file_end]):
-                file_end += 1
-            checksum_material += read_binary_file(match.group(1), config_lines[file_start:file_end])
-            line_index = file_end + 1
+            line_index, add = slice_file(match, config_lines, line_index + 1, read_binary_file)
+            checksum_material += add
             continue
 
         # extract/print current checksum
@@ -121,6 +119,8 @@ def main():
             continue
 
         # line is ignored
+        if debug > 0:
+            print "Ignored (not relevant for checksum): %s" % line.strip()
         line_index += 1
 
     print " Proper Checksum: %08X" % (binascii.crc32(checksum_material) & 0xffffffff)
