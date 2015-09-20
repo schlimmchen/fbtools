@@ -53,11 +53,19 @@ def read_binary_file(filename, lines):
         result += binascii.unhexlify(line.strip())
     return result
 
-def slice_file(match, config_lines, file_start, handler):
+def slice_file(regex, handler, checksum_material, config_lines, line_index):
+    # try to match the current line (file name line), return if it does not
+    match = regex.match(config_lines[line_index]);
+    if not match: return (False, line_index, checksum_material)
+
+    # find borders of the file content and process it (add to checksum maaterial)
+    file_start = line_index + 1
     file_end = file_start + 1
-    while not re.match(any_file_end_regex, config_lines[file_end]):
+    while not any_file_end_regex.match(config_lines[file_end]):
         file_end += 1
-    return (file_end + 1, handler(match.group(1), config_lines[file_start:file_end]))
+    checksum_material += handler(match.group(1), config_lines[file_start:file_end])
+    return (True, file_end + 1, checksum_material)
+
 ################################################################################
 # main
 ################################################################################
@@ -87,10 +95,8 @@ def main():
 
     line_index = int(0)
     while line_index < len(config_lines):
-        line = config_lines[line_index]
-
         # handling of key-value-pairs relevant for checksum material
-        match = re.match(var_val_pair_regex, line);
+        match = re.match(var_val_pair_regex, config_lines[line_index]);
         if match:
             # concatenate key string with value string and NUL
             checksum_material += match.group(1) + match.group(2) + '\0';
@@ -98,21 +104,17 @@ def main():
             continue
 
         # handling of config files
-        match = re.match(cfg_file_start_regex, line);
-        if match:
-            line_index, add = slice_file(match, config_lines, line_index + 1, read_config_file)
-            checksum_material += add
-            continue
+        result, line_index, checksum_material = \
+            slice_file(cfg_file_start_regex, read_config_file, checksum_material, config_lines, line_index)
+        if result: continue
 
         # handling of binary files
-        match = re.match(bin_file_start_regex, line);
-        if match:
-            line_index, add = slice_file(match, config_lines, line_index + 1, read_binary_file)
-            checksum_material += add
-            continue
+        result, line_index, checksum_material = \
+            slice_file(bin_file_start_regex, read_binary_file, checksum_material, config_lines, line_index)
+        if result: continue
 
         # extract/print current checksum
-        match = re.match(current_checksum_regex, line);
+        match = re.match(current_checksum_regex, config_lines[line_index]);
         if match:
             print "Current Checksum: %s" % match.groups(1)
             line_index += 1
@@ -120,7 +122,7 @@ def main():
 
         # line is ignored
         if debug > 0:
-            print "Ignored (not relevant for checksum): %s" % line.strip()
+            print "Ignored (not relevant for checksum): %s" % config_lines[line_index].strip()
         line_index += 1
 
     print " Proper Checksum: %08X" % (binascii.crc32(checksum_material) & 0xffffffff)
