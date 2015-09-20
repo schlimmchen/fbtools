@@ -4,7 +4,6 @@ import binascii
 import sys, re
 
 # TODO credits
-# TODO windows line endings?
 
 ################################################################################
 # global pre-compiled regex objects for later matching
@@ -87,7 +86,8 @@ def main():
 
     try:
         with file(filename) as f:
-            config_lines = f.readlines()
+            # replace CRLF line endings by LF line endings
+            config_lines = [line.replace("\r\n", "\n") for line in f.readlines()]
     except Exception as e:
         print "ERROR: File \"%s\" could not be read." % filename
         if hasattr(e, "strerror"): print "ERROR: %s" % e.strerror
